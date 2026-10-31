@@ -1,0 +1,31 @@
+{
+  "server": {
+    "name": "NexForge",
+    "region": "—",
+    "provider": "—"
+  },
+  "apps": {
+    "nexforge": {
+      "name": "NexForge",
+      "icon": "⬡",
+      "env": "Produção"
+    }
+  },
+  "domains": [],
+  "backups": {
+    "dir": "/backups",
+    "command": [
+      "/bin/sh",
+      "/scripts/backup.sh"
+    ],
+    "timeoutMs": 1800000
+  },
+  "ignoreContainers": [
+    "nexforge-db",
+    "nexforge-frontend"
+  ],
+  "thresholds": {
+    "disk": 90,
+    "ram": 90
+  }
+}

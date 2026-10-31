@@ -1,0 +1,15 @@
+node_modules
+.env
+.env.*
+config.json
+data
+test
+backups
+host-metrics
+secrets
+*.log
+*.pem
+*.key
+*.tar
+*.tar.gz
+*.tgz

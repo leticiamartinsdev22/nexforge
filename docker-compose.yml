@@ -1,0 +1,193 @@
+name: nexforge
+
+services:
+  docker-api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.docker-proxy
+    restart: unless-stopped
+    user: "node:0"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=256m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    networks:
+      - docker_api
+    expose:
+      - "2375"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:2375/_ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    user: "70:70"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16m,uid=70,gid=70,mode=3775
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: ${NEXFORGE_DB_NAME:-nexforge}
+      POSTGRES_USER: ${NEXFORGE_DB_USER:-nexforge}
+      POSTGRES_PASSWORD_FILE: /run/secrets/nexforge_db_password
+    secrets:
+      - nexforge_db_password
+    volumes:
+      - nexforge_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  agent:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      docker-api:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      CONFIG_PATH: /app/config.json
+      DOCKER_HOST: tcp://docker-api:2375
+      TZ: ${TZ:-America/Cuiaba}
+      CORS_ORIGIN: http://localhost:${NEXFORGE_PORT:-4173},http://127.0.0.1:${NEXFORGE_PORT:-4173}
+      TRUST_PROXY: "1"
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${NEXFORGE_DB_NAME:-nexforge}
+      DATABASE_USER: ${NEXFORGE_DB_USER:-nexforge}
+      DATABASE_PASSWORD_FILE: /run/secrets/nexforge_db_password
+      PANEL_PASSWORD_FILE: /run/secrets/nexforge_panel_password
+      PANEL_SECRET_FILE: /run/secrets/nexforge_panel_secret
+      METRICS_RETENTION_DAYS: ${NEXFORGE_METRICS_RETENTION_DAYS:-30}
+      POLL_MS: ${NEXFORGE_POLL_MS:-60000}
+      HOST_METRICS_FILE: /host-metrics/host.json
+      HOST_ACTIONS_DIR: /host-actions
+      BACKUP_RETENTION_DAYS: ${NEXFORGE_BACKUP_RETENTION_DAYS:-30}
+      RESTIC_REPOSITORY: ${NEXFORGE_RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD_FILE: /run/secrets/nexforge_restic_password
+      AWS_SHARED_CREDENTIALS_FILE: /run/secrets/nexforge_aws_credentials
+      AWS_DEFAULT_REGION: ${NEXFORGE_OFFSITE_REGION:-us-east-1}
+      RESTIC_KEEP_DAILY: ${NEXFORGE_RESTIC_KEEP_DAILY:-30}
+      RESTIC_KEEP_WEEKLY: ${NEXFORGE_RESTIC_KEEP_WEEKLY:-8}
+      RESTIC_KEEP_MONTHLY: ${NEXFORGE_RESTIC_KEEP_MONTHLY:-12}
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=256m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - nexforge_db_password
+      - nexforge_panel_password
+      - nexforge_panel_secret
+      - nexforge_restic_password
+      - nexforge_aws_credentials
+    networks:
+      - default
+      - docker_api
+    volumes:
+      - type: bind
+        source: ./server/config.json
+        target: /app/config.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${NEXFORGE_BACKUPS_PATH:-./backups}
+        target: /backups
+      - type: bind
+        source: ./server/scripts
+        target: /scripts
+        read_only: true
+      - type: bind
+        source: ${NEXFORGE_HOST_METRICS_PATH:-./host-metrics}
+        target: /host-metrics
+        read_only: true
+      - type: bind
+        source: ${NEXFORGE_HOST_ACTIONS_PATH:-${NEXFORGE_HOST_METRICS_PATH:-./host-metrics}/../host-actions}
+        target: /host-actions
+      - nexforge_agent_data:/app/data
+    expose:
+      - "3001"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_LIVE: "true"
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    user: nginx
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${NEXFORGE_PORT:-4173}:8080"
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://127.0.0.1:8080/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  nexforge_db_data:
+  nexforge_agent_data:
+
+secrets:
+  nexforge_db_password:
+    file: ${NEXFORGE_SECRETS_PATH:?Set NEXFORGE_SECRETS_PATH to the protected NexForge secrets directory}/nexforge_db_password
+  nexforge_panel_password:
+    file: ${NEXFORGE_SECRETS_PATH:?Set NEXFORGE_SECRETS_PATH to the protected NexForge secrets directory}/panel_password
+  nexforge_panel_secret:
+    file: ${NEXFORGE_SECRETS_PATH:?Set NEXFORGE_SECRETS_PATH to the protected NexForge secrets directory}/panel_secret
+  nexforge_restic_password:
+    file: ${NEXFORGE_SECRETS_PATH:?Set NEXFORGE_SECRETS_PATH to the protected NexForge secrets directory}/restic_password
+  nexforge_aws_credentials:
+    file: ${NEXFORGE_SECRETS_PATH:?Set NEXFORGE_SECRETS_PATH to the protected NexForge secrets directory}/aws_credentials
+
+networks:
+  docker_api:
+    internal: true
+

@@ -1,0 +1,45 @@
+services:
+  docker-api:
+    group_add:
+      - "${NEXFORGE_DOCKER_GID:?Set NEXFORGE_DOCKER_GID to the host docker group ID}"
+
+  agent:
+    environment:
+      TRUST_PROXY: "2"
+
+  frontend:
+    networks:
+      - default
+      - edge
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    environment:
+      NEXFORGE_DOMAIN: ${NEXFORGE_DOMAIN:?Set NEXFORGE_DOMAIN in the VPS .env file}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - nexforge_caddy_data:/data
+      - nexforge_caddy_config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+volumes:
+  nexforge_caddy_data:
+  nexforge_caddy_config:
+
+networks:
+  edge:

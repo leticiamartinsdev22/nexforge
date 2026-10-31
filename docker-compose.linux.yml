@@ -1,0 +1,4 @@
+services:
+  docker-api:
+    group_add:
+      - "${NEXFORGE_DOCKER_GID:?Set NEXFORGE_DOCKER_GID to the host docker group ID}"
