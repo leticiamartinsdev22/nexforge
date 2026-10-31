@@ -3,9 +3,10 @@ import { ShieldCheck, Clock, TriangleAlert, Globe, Check, RefreshCw, Download } 
 import { useData } from '../store-utils'
 import { Panel, Stats, Pill } from '../components/ui'
 import { useRefreshAction } from '../components/use-refresh-action'
+import { startPolling } from '../polling'
 
 export default function Security() {
-  const { domains, hardening, security: sec, runHostUpdate, refreshHostUpdates } = useData()
+  const { domains, hardening, security: sec, runHostUpdate, refreshHostUpdates, applyHostUpdates } = useData()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState(null)
   const { run: runCheckRefresh, loading: checking } = useRefreshAction({
@@ -25,10 +26,8 @@ export default function Security() {
 
   useEffect(() => {
     if (!updating) return undefined
-    void refreshHostUpdates()
-    const timer = window.setInterval(() => { void refreshHostUpdates() }, 4000)
-    return () => window.clearInterval(timer)
-  }, [updating, refreshHostUpdates])
+    return startPolling({ intervalMs: 4000, task: refreshHostUpdates, onResult: applyHostUpdates })
+  }, [updating, refreshHostUpdates, applyHostUpdates])
 
   const requestAction = async (action) => {
     if (action === 'upgrade' && !window.confirm('Instalar atualizações do Ubuntu agora? O NexForge executa apenas apt-get upgrade -y, sem remover pacotes. Alguns serviços podem reiniciar durante a atualização.')) return

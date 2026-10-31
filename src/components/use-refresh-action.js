@@ -13,7 +13,6 @@ export function useRefreshAction({ refresh, pendingText = 'Verificando...', succ
 
     running.current = true
     const toastId = showToast({
-      id: String(Date.now()) + '-' + Math.random().toString(16).slice(2),
       title: pendingText,
       tone: 'info',
       duration: 0,

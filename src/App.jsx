@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
-import { isAuth } from './auth'
-import { LIVE } from './config'
 import { fetchSession } from './api'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
@@ -22,9 +20,8 @@ import { ThemeProvider } from './theme'
 import { ToastProvider } from './components/ToastProvider'
 
 function Protected({ children }) {
-  const [authenticated, setAuthenticated] = useState(() => LIVE ? null : isAuth())
+  const [authenticated, setAuthenticated] = useState(null)
   useEffect(() => {
-    if (!LIVE) return undefined
     let active = true
     const controller = new AbortController()
     fetchSession({ signal: controller.signal })

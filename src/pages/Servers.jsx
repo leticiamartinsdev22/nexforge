@@ -11,7 +11,7 @@ export default function Servers() {
   const [provider, setProvider] = useState('')
   const [region, setRegion] = useState('')
   const { apps, server, refresh, runBackup, updateServerMetadata } = useData()
-  const cpu = useHistory('cpu', server.cpu, 28, 14)
+  const cpu = useHistory('cpu')
   const off = apps.filter((a) => a.status !== 'ok').length
   const cols = [
     { k: 'n', h: 'Servidor', r: (s) => (

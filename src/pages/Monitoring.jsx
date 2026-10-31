@@ -2,8 +2,8 @@ import { Cpu, MemoryStick, HardDrive, Network, Gauge } from 'lucide-react'
 import { useData, useHistory } from '../store-utils'
 import { Panel, Stats, Spark, Bar } from '../components/ui'
 
-function Chart({ title, k, base, jitter, color, value, norm }) {
-  const s = useHistory(k, base, 48, jitter, norm)
+function Chart({ title, k, color, value, norm }) {
+  const s = useHistory(k, norm)
   return (
     <Panel>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
@@ -28,10 +28,10 @@ export default function Monitoring() {
         { icon: Gauge, label: 'Load (1 min)', value: server.load == null ? 'Não medido' : server.load, sub: `${server.vcpu} vCPU`, tone: 'ok' },
       ]} />
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <Chart title="CPU" k="cpu" base={server.cpu} jitter={9} color="#6b8cff" value={`${server.cpu.toFixed(0)}%`} />
-        <Chart title="Memória" k="ram" base={server.ram} jitter={2} color="#3ddc97" value={`${server.ram.toFixed(0)}%`} />
-        <Chart title="Disco" k="disk" base={server.disk} jitter={0.4} color="#f5a524" value={`${server.disk.toFixed(0)}%`} />
-        <Chart title="Rede" k="net" base={8} jitter={6} color="#2dd4bf" norm value={`${server.netMBs.toFixed(2)} MB/s`} />
+        <Chart title="CPU" k="cpu" color="#6b8cff" value={`${server.cpu.toFixed(0)}%`} />
+        <Chart title="Memória" k="ram" color="#3ddc97" value={`${server.ram.toFixed(0)}%`} />
+        <Chart title="Disco" k="disk" color="#f5a524" value={`${server.disk.toFixed(0)}%`} />
+        <Chart title="Rede" k="net" color="#2dd4bf" norm value={`${server.netMBs.toFixed(2)} MB/s`} />
       </div>
       <Panel title="Consumo por aplicação" sub="Ordenado por CPU" style={{ marginTop: 20 }}>
         {top.length === 0 && <div style={{ color: 'var(--dimmer)', fontSize: 13 }}>Nenhuma aplicação com consumo no momento.</div>}

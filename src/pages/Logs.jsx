@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { LayoutGrid, TriangleAlert, ShieldCheck } from 'lucide-react'
 import { useData } from '../store-utils'
-import { LIVE, POLL_MS } from '../config'
+import { POLL_MS } from '../config'
 import { fetchLogs } from '../api'
-import { demoLogs } from '../data'
+import { startPolling } from '../polling'
 import { Panel, Stats } from '../components/ui'
 
 const COL = { INFO: '#6b7488', WARN: '#f5a524', ERROR: '#ff5470' }
@@ -15,26 +15,19 @@ export default function Logs() {
   const [err, setErr] = useState(false)
   const activeSel = logSources.includes(sel) ? sel : logSources[0] ?? ''
 
-  const load = useCallback(async () => {
-    if (!LIVE || !activeSel) return
-    try {
-      const result = await fetchLogs(activeSel)
-      setLines(result.lines)
-      setErr(false)
-    } catch {
-      setLines([])
-      setErr(true)
-    }
-  }, [activeSel])
+  const load = useCallback((signal) => fetchLogs(activeSel, { signal }), [activeSel])
 
   useEffect(() => {
-    if (!LIVE || !activeSel) return undefined
-    const initial = setTimeout(() => { void load() }, 0)
-    const id = setInterval(() => { void load() }, POLL_MS)
-    return () => { clearTimeout(initial); clearInterval(id) }
+    if (!activeSel) return undefined
+    return startPolling({
+      intervalMs: POLL_MS,
+      task: load,
+      onResult: (result) => { setLines(result.lines); setErr(false) },
+      onError: () => { setLines([]); setErr(true) },
+    })
   }, [activeSel, load])
 
-  const visibleLines = LIVE ? lines : activeSel ? demoLogs(activeSel) : []
+  const visibleLines = activeSel ? lines : []
   const n = (level) => visibleLines.filter((line) => line.lvl === level).length
   return (
     <div>

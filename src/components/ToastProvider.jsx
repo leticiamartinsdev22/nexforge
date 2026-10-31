@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ToastContext } from './toast-context'
 
+let toastSequence = 0
 function uid() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  toastSequence += 1
+  return 'nexforge-toast-' + toastSequence
 }
 
 function ToastViewport({ toasts, dismissToast }) {

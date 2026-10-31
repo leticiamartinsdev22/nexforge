@@ -14,15 +14,15 @@ nexforge/
 └── server/     agente (Node/Express) que coleta os dados reais
 ```
 
-## 1) Ambiente local (sem backend)
+## 1) Frontend local conectado ao agente
 
 ```bash
 npm install
 npm run dev
 ```
-Abra http://localhost:5173. Em modo local de fallback, a aplicação usa dados de desenvolvimento sem depender do agente ativo.
+Abra http://localhost:5173. O painel usa somente dados do agente; sem conexão, exibe o estado do servidor offline e não inventa métricas.
 
-## 2) Modo ao vivo (dados reais a cada 60s)
+## 2) Agente e dados ao vivo (atualização a cada 60s)
 
 ### Agente (`server/`)
 ```bash

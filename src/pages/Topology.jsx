@@ -198,7 +198,7 @@ export default function Topology() {
   const [showTraffic, setShowTraffic] = useState(true)
   const [fullScreen, setFullScreen] = useState(false)
   const topologyRef = useRef(null)
-  const cpu = useHistory('cpu', server.cpu, 30, 14), ram = useHistory('ram', server.ram, 30, 1), disk = useHistory('disk', server.disk, 30, 0.4), net = useHistory('net', 6, 30, 7, true)
+  const cpu = useHistory('cpu'), ram = useHistory('ram'), disk = useHistory('disk'), net = useHistory('net', true)
   const online = apps.filter((a) => a.status === 'ok').length
   const pct = apps.length ? Math.round((online / apps.length) * 100) : 0
   const tiles = [[ShieldCheck, 'Status geral', healthScore(apps, server), '/100'], [Boxes, 'Serviços', online, ` de ${apps.length} online`], [Cpu, 'CPU do host', server.cpu.toFixed(1), '%'], [MemoryStick, 'RAM', server.ram.toFixed(1), '%'], [Network, 'Rede', server.netMBs.toFixed(2), ' MB/s']]

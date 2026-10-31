@@ -18,6 +18,4 @@ export const security = { packages: null, rebootPending: false, lastBoot: 'Aguar
 export const offsite = { destination: 'Aguardando configuração', lastSync: 'Sem sincronização', encryption: 'Não informado' }
 export const backup = { enabled: false, running: false, schedule: { freq: 'Diária', time: '03:15' }, next: null }
 
-export const mock = { server, apps, domains, dbs, backups, alerts, events, hardening, security, offsite, logSources, backup }
-
-export const demoLogs = () => []
+export const emptySnapshot = { server, apps, domains, dbs, backups, alerts, events, hardening, security, offsite, logSources, backup }

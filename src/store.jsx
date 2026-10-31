@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { mock } from './data'
-import { LIVE, POLL_MS } from './config'
+import { emptySnapshot } from './data'
+import { POLL_MS } from './config'
 import { fetchHostUpdates, fetchMetrics, fetchSnapshot, send, AuthError } from './api'
 import { logout } from './auth'
 import { Ctx } from './store-context'
 import { rel } from './store-utils'
+import { startPolling } from './polling'
 
 const READ_ALERTS_KEY = 'nexforge.read-alerts.v1'
 
@@ -24,7 +25,7 @@ const EMPTY = {
 
 const WINDOWS = { '1h': 3600e3, '24h': 864e5, '7d': 7 * 864e5, '30d': 30 * 864e5, all: Infinity }
 
-// "15h atrás" -> timestamp (só para os dados de exemplo)
+// Converte horários relativos legados quando o agente não envia timestamp.
 const parseWhen = (w) => {
   const m = /(\d+)\s*(min|h|d)/.exec(w ?? '')
   return m ? Date.now() - Number(m[1]) * { min: 60e3, h: 3600e3, d: 864e5 }[m[2]] : Date.now()
@@ -56,8 +57,8 @@ const onAuthError = (e) => {
 }
 
 export function DataProvider({ children }) {
-  const [snap, setSnap] = useState(() => normalize(LIVE ? null : mock))
-  const [meta, setMeta] = useState(() => ({ mode: LIVE ? 'connecting' : 'demo', updatedAt: new Date(), error: '' }))
+  const [snap, setSnap] = useState(() => normalize(emptySnapshot))
+  const [meta, setMeta] = useState(() => ({ mode: 'connecting', updatedAt: new Date(), error: '' }))
   const [filters, setFilters] = useState({ env: 'all', window: '24h' })
   const [chartHistory, setChartHistory] = useState({})
   const [readAlertIds, setReadAlertIds] = useState(loadReadAlertIds)
@@ -83,28 +84,19 @@ export function DataProvider({ children }) {
     setMeta({ mode: 'live', updatedAt: new Date(), error: '', warnings: raw.warnings ?? [] })
   }, [])
 
-  const load = useCallback(async () => {
-    try {
-      const request = ++historyRequest.current
-      const snapshot = await fetchSnapshot()
-      // Metrics are optional when the agent runs without PostgreSQL.
-      const metrics = await fetchMetrics(filters.window).catch((error) => {
-        if (error instanceof AuthError) throw error
-        return { history: [] }
-      })
-      if (request === historyRequest.current) {
-        apply(snapshot)
-        setChartHistory(Object.fromEntries(['cpu', 'ram', 'disk', 'net'].map((key) => [key, metrics.history.map((point) => point[key])])))
-      }
-    } catch (e) {
-      if (!onAuthError(e)) setMeta((m) => ({ ...m, mode: 'error', error: e.message }))
-    }
-  }, [apply, filters.window])
+  const load = useCallback(async (signal) => {
+    const request = ++historyRequest.current
+    const snapshot = await fetchSnapshot({ signal })
+    const metrics = await fetchMetrics(filters.window, { signal }).catch((error) => {
+      if (error instanceof AuthError) throw error
+      return { history: [] }
+    })
+    return { request, snapshot, metrics }
+  }, [filters.window])
 
   // Coleta imediata no agente (botão ↻ e "Executar verificação")
   const refresh = useCallback(async () => {
-    if (!LIVE) { setMeta((m) => ({ ...m, updatedAt: new Date() })); return true }
-    try {
+        try {
       const request = ++historyRequest.current
       const r = await send('POST', '/api/refresh')
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -128,8 +120,7 @@ export function DataProvider({ children }) {
   }, [])
 
   const runBackup = useCallback(() => act(async () => {
-    if (!LIVE) return { ok: true, msg: 'Backup simulado (modo demo).' }
-    const r = await send('POST', '/api/actions/backup')
+        const r = await send('POST', '/api/actions/backup')
     if (r.status === 202) return { ok: true, msg: 'Backup iniciado. O resultado aparece em Alertas.' }
     if (r.status === 409) return { ok: false, msg: 'Já existe um backup em andamento.' }
     if (r.status === 501) return { ok: false, msg: 'Backup não configurado: defina backups.command no config.json do agente.' }
@@ -137,15 +128,13 @@ export function DataProvider({ children }) {
   }), [act])
 
   const saveSchedule = useCallback((freq, time) => act(async () => {
-    if (!LIVE) return { ok: true, msg: 'Agendamento salvo (modo demo).' }
-    const r = await send('PUT', '/api/backup-schedule', { freq, time })
+        const r = await send('PUT', '/api/backup-schedule', { freq, time })
     if (r.ok) { apply(r.data); return { ok: true, msg: 'Agendamento salvo.' } }
     return { ok: false, msg: r.status === 400 ? 'Frequência ou horário inválido.' : 'Falha ao salvar o agendamento.' }
   }), [act, apply])
 
   const mutateSnapshot = useCallback(async (method, path, body, successMessage) => act(async () => {
-    if (!LIVE) return { ok: false, msg: 'Ação disponível apenas no agente conectado.' }
-    const r = await send(method, path, body)
+        const r = await send(method, path, body)
     if (r.ok && r.data) {
       const snapshot = r.data.snapshot ?? r.data
       if (snapshot.server && Array.isArray(snapshot.apps)) apply(snapshot)
@@ -164,8 +153,7 @@ export function DataProvider({ children }) {
   const setAppVisibility = useCallback((key, visible) => mutateSnapshot('PUT', `/api/apps/${encodeURIComponent(key)}/visibility`, { visible }, visible ? 'Aplicação restaurada no painel.' : 'Aplicação removida do painel.'), [mutateSnapshot])
 
   const runHostUpdate = useCallback((action) => act(async () => {
-    if (!LIVE) return { ok: false, msg: 'Ação disponível apenas no agente conectado.' }
-    const r = await send('POST', `/api/host-updates/${action}`)
+        const r = await send('POST', `/api/host-updates/${action}`)
     if (r.status === 202) {
       if (r.data?.snapshot) apply(r.data.snapshot)
       return { ok: true, msg: action === 'check' ? 'Verificação de pacotes enfileirada no Ubuntu WSL.' : 'Atualização segura enfileirada no Ubuntu WSL.' }
@@ -176,48 +164,45 @@ export function DataProvider({ children }) {
     return { ok: false, msg: 'Não foi possível iniciar a ação no Ubuntu WSL.' }
   }), [act, apply])
 
-  const refreshHostUpdates = useCallback(async () => {
-    if (!LIVE) return
-    try {
-      const result = await fetchHostUpdates()
-      setSnap((current) => ({
-        ...current,
-        security: {
-          ...current.security,
-          updateAction: result.update,
-          packages: Number.isFinite(result.update?.packagesPending) ? result.update.packagesPending : current.security.packages,
-        },
-      }))
-    } catch (e) { if (!onAuthError(e)) setMeta((m) => ({ ...m, error: e.message })) }
+  const refreshHostUpdates = useCallback((signal) => fetchHostUpdates({ signal }), [])
+  const applyHostUpdates = useCallback((result) => {
+    setSnap((current) => ({
+      ...current,
+      security: {
+        ...current.security,
+        updateAction: result.update,
+        packages: Number.isFinite(result.update?.packagesPending) ? result.update.packagesPending : current.security.packages,
+      },
+    }))
   }, [])
 
-  useEffect(() => {
-    if (LIVE) return undefined
-    const id = setInterval(() => setMeta((current) => ({ ...current, updatedAt: new Date() })), POLL_MS)
-    return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    if (!LIVE) return undefined
-    const initial = setTimeout(() => { void load() }, 0)
-    const id = setInterval(() => { void load() }, POLL_MS)
-    return () => { clearTimeout(initial); clearInterval(id) }
-  }, [load])
+  useEffect(() => startPolling({
+    intervalMs: POLL_MS,
+    task: load,
+    onResult: ({ request, snapshot, metrics }) => {
+      if (request !== historyRequest.current) return
+      apply(snapshot)
+      setChartHistory(Object.fromEntries(['cpu', 'ram', 'disk', 'net'].map((key) => [key, metrics.history.map((point) => point[key])])))
+    },
+    onError: (error) => {
+      if (!onAuthError(error)) setMeta((current) => ({ ...current, mode: 'error', error: error.message }))
+    },
+  }), [apply, load])
 
   const value = useMemo(() => {
     const win = WINDOWS[filters.window]
     const now = meta.updatedAt.getTime()
     return {
       ...snap,
-      history: LIVE ? chartHistory : snap.history,
+      history: chartHistory,
       apps: filters.env === 'all' ? snap.apps : snap.apps.filter((a) => a.env === filters.env),
       allAlerts: snap.alerts,
       alerts: snap.alerts.filter((a) => now - a.ts <= win),
       events: snap.events.filter((e) => now - e.ts <= win),
       meta, filters, setFilters, refresh, runBackup, saveSchedule, updateServerMetadata, addDomain, removeDomain,
-      setAppVisibility, runHostUpdate, refreshHostUpdates, readAlertIds, markAlertsRead,
+      setAppVisibility, runHostUpdate, refreshHostUpdates, applyHostUpdates, readAlertIds, markAlertsRead,
     }
-  }, [snap, chartHistory, meta, filters, refresh, runBackup, saveSchedule, updateServerMetadata, addDomain, removeDomain, setAppVisibility, runHostUpdate, refreshHostUpdates, readAlertIds, markAlertsRead])
+  }, [snap, chartHistory, meta, filters, refresh, runBackup, saveSchedule, updateServerMetadata, addDomain, removeDomain, setAppVisibility, runHostUpdate, refreshHostUpdates, applyHostUpdates, readAlertIds, markAlertsRead])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
