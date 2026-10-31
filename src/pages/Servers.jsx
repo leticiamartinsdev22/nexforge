@@ -72,7 +72,7 @@ export default function Servers() {
               }
               setBusy('')
             }}>
-              <span className="ic"><Ic size={17} /></span><span style={{ flex: 1 }}><div className="t">{busy === k ? 'Executando...' : t}</div><div className="d">{d}</div></span><ChevronRight size={16} color="#4b5565" />
+              <span className="ic"><Ic size={17} /></span><span style={{ flex: 1 }}><div className="t">{busy === k ? 'Executando...' : t}</div><div className="d">{d}</div></span><ChevronRight size={16} color="#7d8fb5" />
             </button>
           ))}
           {msg?.t && <div className={`msg ${msg.ok ? 'ok' : 'bad'}`}>{msg.t}</div>}

@@ -36,7 +36,7 @@ export default function Monitoring() {
       <Panel title="Consumo por aplicação" sub="Ordenado por CPU" style={{ marginTop: 20 }}>
         {top.length === 0 && <div style={{ color: 'var(--dimmer)', fontSize: 13 }}>Nenhuma aplicação com consumo no momento.</div>}
         {top.map((a) => (
-          <div key={a.name} style={{ display: 'grid', gridTemplateColumns: '240px 1fr 100px', alignItems: 'center', gap: 20, padding: '12px 0', borderTop: '1px solid var(--line2)' }}>
+          <div key={a.name} className="monitoring-app-row" style={{ display: 'grid', gridTemplateColumns: '240px 1fr 100px', alignItems: 'center', gap: 20, padding: '12px 0', borderTop: '1px solid var(--line2)' }}>
             <span style={{ fontWeight: 600 }}>{a.icon}&nbsp; {a.name}</span><Bar value={a.cpu} track showN={false} color="#6b8cff" />
             <span style={{ textAlign: 'right', color: 'var(--dim)' }}>{a.cpu}% · {a.mem} MB</span>
           </div>

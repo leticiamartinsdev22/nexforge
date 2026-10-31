@@ -143,6 +143,15 @@ function FlowGraph({ cpu, ram, disk, net, showTraffic }) {
   )
 }
 
+function readTopologyLayout(mode) {
+  try {
+    const value = JSON.parse(localStorage.getItem(`nexforge_topology_layout_${mode}`) || '{}')
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).filter(([, p]) =>
+      p && Number.isFinite(p.x) && Number.isFinite(p.y)))
+  } catch { return {} }
+}
+
 function DepsRadial({ mode, showTraffic }) {
   const { apps, domains, server } = useData()
   const idPrefix = useId().replaceAll(':', '')
@@ -150,27 +159,116 @@ function DepsRadial({ mode, showTraffic }) {
   const pan = useSvgPan(W2, H2)
   const sp = (i, k) => 30 + (i * (H2 - 60)) / Math.max(k - 1, 1)
   const host = mode === 'radial' ? { x: W2 / 2, y: H2 / 2 } : { x: 880, y: H2 / 2 }
-  let nodes, edges
-  if (mode === 'radial') {
-    nodes = apps.map((a, i) => { const t = (i / n) * Math.PI * 2 - Math.PI / 2; return { ...a, x: W2 / 2 + Math.cos(t) * 330, y: H2 / 2 + Math.sin(t) * 250, t } })
-    edges = nodes.map((x) => [host, x])
-  } else {
-    const ds = domains.map((d, i) => ({ id: d.domain, name: d.domain, status: 'ok', x: 250, y: sp(i, domains.length), left: true }))
-    nodes = [...ds, ...apps.map((a, i) => ({ ...a, id: a.name, x: 560, y: sp(i, n) }))]
-    edges = [...domains.flatMap((d) => { const f = ds.find((x) => x.id === d.domain), t = nodes.find((x) => x.id === d.app); return t ? [[f, t]] : [] }),
-      ...nodes.filter((x) => !x.left).map((x) => [x, host])]
+  const defaultNodes = mode === 'radial'
+    ? apps.map((a, i) => {
+      const t = (i / n) * Math.PI * 2 - Math.PI / 2
+      return { ...a, id: a.name, x: W2 / 2 + Math.cos(t) * 330, y: H2 / 2 + Math.sin(t) * 250, t }
+    })
+    : [
+      ...domains.map((d, i) => ({ id: d.domain, name: d.domain, status: 'ok', x: 250, y: sp(i, domains.length), left: true })),
+      ...apps.map((a, i) => ({ ...a, id: a.name, x: 560, y: sp(i, n) })),
+    ]
+  const [layoutState, setLayoutState] = useState(() => ({ mode, positions: readTopologyLayout(mode) }))
+  const layoutRef = useRef(layoutState)
+  const [draggingNode, setDraggingNode] = useState('')
+  const dragNodeRef = useRef(null)
+  const positions = layoutState.mode === mode ? layoutState.positions : {}
+  const nodes = defaultNodes.map((node) => ({ ...node, ...(positions[node.id] ?? {}) }))
+  const edges = mode === 'radial'
+    ? nodes.map((node) => [host, node])
+    : [
+      ...domains.flatMap((domain) => {
+        const from = nodes.find((node) => node.left && node.id === domain.domain)
+        const to = nodes.find((node) => node.id === domain.app)
+        return from && to ? [[from, to]] : []
+      }),
+      ...nodes.filter((node) => !node.left).map((node) => [node, host]),
+    ]
+  const col = (status) => (status === 'ok' ? '#3ddc97' : status === 'bad' ? '#ff5470' : '#4b5565')
+
+  const saveNodePosition = (id, x, y) => {
+    const current = layoutRef.current.mode === mode ? layoutRef.current.positions : {}
+    const next = { mode, positions: { ...current, [id]: { x, y } } }
+    layoutRef.current = next
+    setLayoutState(next)
+    try { localStorage.setItem(`nexforge_topology_layout_${mode}`, JSON.stringify(next.positions)) } catch {}
   }
-  const col = (s) => (s === 'ok' ? '#3ddc97' : s === 'bad' ? '#ff5470' : '#4b5565')
+  const svgPosition = (event) => {
+    const svg = event.currentTarget.ownerSVGElement
+    const matrix = svg?.getScreenCTM()
+    if (!svg || !matrix) return null
+    const point = svg.createSVGPoint()
+    point.x = event.clientX
+    point.y = event.clientY
+    return point.matrixTransform(matrix.inverse())
+  }
+  const beginNodeDrag = (id, event) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragNodeRef.current = { id, pointerId: event.pointerId }
+    setDraggingNode(id)
+  }
+  const moveNode = (event) => {
+    const drag = dragNodeRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    const point = svgPosition(event)
+    if (!point) return
+    const margin = 32
+    saveNodePosition(drag.id,
+      Math.max(margin, Math.min(W2 - margin, point.x)),
+      Math.max(margin, Math.min(H2 - margin, point.y)))
+  }
+  const endNodeDrag = (event) => {
+    if (dragNodeRef.current?.pointerId !== event.pointerId) return
+    event.stopPropagation()
+    dragNodeRef.current = null
+    setDraggingNode('')
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  const moveNodeByKey = (node, event) => {
+    const step = event.shiftKey ? 25 : 10
+    const delta = {
+      ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step],
+    }[event.key]
+    if (!delta) return
+    event.preventDefault()
+    const margin = 32
+    saveNodePosition(node.id,
+      Math.max(margin, Math.min(W2 - margin, node.x + delta[0])),
+      Math.max(margin, Math.min(H2 - margin, node.y + delta[1])))
+  }
+  const nodeDragHandlers = (node) => ({
+    onPointerDown: (event) => beginNodeDrag(node.id, event),
+    onPointerMove: moveNode,
+    onPointerUp: endNodeDrag,
+    onPointerCancel: endNodeDrag,
+    onKeyDown: (event) => moveNodeByKey(node, event),
+  })
+  const dragLabel = 'Arraste para mover. Use as setas do teclado para mover 10 unidades (Shift + seta move 25).'
+
   return (
-    <svg {...pan.handlers} className={`topology-pan-surface${pan.dragging ? ' is-dragging' : ''}`} viewBox={pan.viewBox} style={{ width: '100%', display: 'block', userSelect: 'none', touchAction: 'none' }} aria-label="Mapa de dependências. Arraste para mover, role para aproximar e clique duas vezes para recentralizar.">
+    <svg {...pan.handlers} className={`topology-pan-surface${pan.dragging ? ' is-dragging' : ''}`} viewBox={pan.viewBox} style={{ width: '100%', display: 'block', userSelect: 'none', touchAction: 'none' }} aria-label="Mapa de dependências. Arraste o fundo para mover, role para aproximar e clique duas vezes para recentralizar.">
       {edges.map(([a, b], i) => <AnimatedEdge key={i} id={`${idPrefix}-edge-${i}`} d={mode === 'radial' ? `M${a.x} ${a.y}L${b.x} ${b.y}` : bez(a.x, a.y, b.x, b.y)}
         color={b.status === 'bad' || a.status === 'bad' ? '#ff5470' : '#6b8cff'} active={b.status !== 'off' && a.status !== 'off'} delay={i} showTraffic={showTraffic} width={1.2} />)}
-      {nodes.map((n2) => {
-        const anchor = mode === 'radial' ? (Math.cos(n2.t) >= 0 ? 'start' : 'end') : n2.left ? 'end' : 'start'
-        return <g key={n2.id || n2.name} className="topology-node" tabIndex="0" role="img" aria-label={`${n2.name}, ${n2.status}`}><title>{`${n2.name} · ${n2.status}`}</title><circle className="topology-node-pulse" cx={n2.x} cy={n2.y} r="8" fill={col(n2.status)} /> <circle cx={n2.x} cy={n2.y} r="5" fill={col(n2.status)} />
-          <text x={n2.x + (anchor === 'start' ? 11 : -11)} y={n2.y + 4} textAnchor={anchor} fill="#cbd5e1" fontSize="12">{n2.name}</text></g>
+      {nodes.map((node) => {
+        const anchor = mode === 'radial' ? (Math.cos(node.t) >= 0 ? 'start' : 'end') : node.left ? 'end' : 'start'
+        return <g key={node.id || node.name} className={`topology-node topology-node-draggable${draggingNode === node.id ? ' is-dragging' : ''}`}
+          {...nodeDragHandlers(node)} tabIndex="0" role="img" aria-label={`${node.name}, ${node.status}. ${dragLabel}`}>
+          <title>{`${node.name} · ${node.status} · arrastável`}</title>
+          <circle className="topology-node-pulse" cx={node.x} cy={node.y} r="8" fill={col(node.status)} />
+          <circle cx={node.x} cy={node.y} r="5" fill={col(node.status)} />
+          <text x={node.x + (anchor === 'start' ? 11 : -11)} y={node.y + 4} textAnchor={anchor} fill="#cbd5e1" fontSize="12">{node.name}</text>
+        </g>
       })}
-      <g transform={`translate(${host.x - 70} ${host.y - 24})`} className="topology-node topology-host"><title>{`${server.name} · ${server.ip}`}</title><rect width="140" height="48" rx="10" fill="#0b1c3c" stroke="#3ddc97" /><text x="70" y="29" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{server.name}</text></g>
+      <g transform={`translate(${host.x - 70} ${host.y - 24})`} className="topology-node topology-host">
+        <title>{`${server.name} · ${server.ip}`}</title>
+        <rect width="140" height="48" rx="10" fill="#0b1c3c" stroke="#3ddc97" />
+        <text x="70" y="29" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{server.name}</text>
+      </g>
     </svg>
   )
 }
@@ -222,7 +320,7 @@ export default function Topology() {
         <div className="seg">{MODES.map(([id, l]) => <button key={id} className={mode === id ? 'on' : ''} onClick={() => setMode(id)}>{l}</button>)}</div>
         <button className={`icon-btn topology-control topology-animation-toggle ${showTraffic ? 'selected' : ''}`} aria-pressed={showTraffic}
           title={showTraffic ? 'Ocultar animação do fluxo' : 'Mostrar animação do fluxo'}
-          aria-label={showTraffic ? 'Ocultar animação do fluxo' : 'Mostrar animação do fluxo'} onClick={() => setShowTraffic((value) => !value)}>
+          onClick={() => setShowTraffic((value) => !value)}>
           {showTraffic ? <Pause size={16} /> : <Play size={16} />}<span>{showTraffic ? 'Pausar fluxo' : 'Animar fluxo'}</span>
         </button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
@@ -254,7 +352,7 @@ export default function Topology() {
       <div className="grid topology-layout" style={{ gridTemplateColumns: 'minmax(0, 1fr) 360px', alignItems: 'start' }}>
         <div className="canvas topology-canvas">
           {mode !== 'map' && <span className="topology-pan-hint">Arraste para mover · roda para zoom · duplo clique para recentralizar</span>}
-          {mode === 'map' ? <MapView /> : mode === 'deps' || mode === 'radial' ? <DepsRadial mode={mode} showTraffic={showTraffic} /> : <FlowGraph cpu={cpu} ram={ram} disk={disk} net={net} showTraffic={showTraffic} />}
+          {mode === 'map' ? <MapView /> : mode === 'deps' || mode === 'radial' ? <DepsRadial key={mode} mode={mode} showTraffic={showTraffic} /> : <FlowGraph cpu={cpu} ram={ram} disk={disk} net={net} showTraffic={showTraffic} />}
         </div>
         <div className="stack">
           <div className="sidep">
@@ -262,7 +360,7 @@ export default function Topology() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
               <Ring value={pct} size={86} stroke={9} label="" suffix="" big={20} unit="%" tone={pct >= 85 ? 'ok' : 'bad'} />
               <div><div style={{ fontSize: 12, color: 'var(--subtle)' }}>Status da infraestrutura</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: !apps.length ? '#6b7488' : pct >= 85 ? 'var(--ok)' : 'var(--bad)', margin: '3px 0' }}>{!apps.length ? 'Sem dados' : pct >= 85 ? 'Saudável' : 'Crítico'}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: !apps.length ? 'var(--dimmer)' : pct >= 85 ? 'var(--ok)' : 'var(--bad)', margin: '3px 0' }}>{!apps.length ? 'Sem dados' : pct >= 85 ? 'Saudável' : 'Crítico'}</div>
                 <div style={{ fontSize: 12, color: 'var(--subtle)' }}>{online} de {apps.length} serviços online</div></div>
             </div>
           </div>

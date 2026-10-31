@@ -127,10 +127,10 @@ export default function Topbar() {
         </div>
         <div className="account-wrap" ref={accountRef}>
           <button className="avatar" onClick={() => { setAccountOpen(!accountOpen); setOpen(false) }} title="Conta e aparência"
-            aria-label="Abrir menu da conta" aria-haspopup="menu" aria-expanded={accountOpen}>AD</button>
+            aria-label="NF: abrir menu da conta" aria-haspopup="menu" aria-expanded={accountOpen}>NF</button>
           {accountOpen && (
             <div className="account-pop" role="menu" aria-label="Menu da conta">
-              <div className="account-heading"><span className="account-avatar">AD</span><span><b>Administrador</b><small>Painel NexForge</small></span></div>
+              <div className="account-heading"><span className="account-avatar">NF</span><span><b>NexForge</b><small>Painel NexForge</small></span></div>
               <div className="account-divider" />
               <div className="account-section">Aparência</div>
               {themes.map(([id, label, Icon]) => (

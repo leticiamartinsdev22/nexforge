@@ -71,7 +71,7 @@ export function Table({ cols, rows }) {
         <thead><tr>{cols.map((c) => <th key={c.k} style={c.w ? { width: c.w } : undefined}>{c.h}</th>)}</tr></thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>{cols.map((c) => <td key={c.k}>{c.r ? c.r(r) : r[c.k]}</td>)}</tr>
+            <tr key={i}>{cols.map((c) => <td key={c.k} data-label={typeof c.h === 'string' ? c.h : ''}>{c.r ? c.r(r) : r[c.k]}</td>)}</tr>
           ))}
         </tbody>
       </table>
@@ -90,7 +90,7 @@ export function Ring({ value, size = 240, stroke = 12, tone = 'bad', label = 'SA
   const [c1, c2] = tone === 'ok' ? ['#7af0bd', '#2fbf84'] : tone === 'warn' ? ['#ffd27a', '#f5a524'] : ['#ff8fa0', '#ff4d6d']
   return (
     <div style={{ position: 'relative', width: size, height: size, flex: 'none' }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', filter: `drop-shadow(0 0 14px ${c2}55)` }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)', filter: `drop-shadow(0 0 14px ${c2}55)` }}>
         <defs><linearGradient id={id} x1="0" y1="0" x2="1" y2="1"><stop stopColor={c1} /><stop offset="1" stopColor={c2} /></linearGradient></defs>
         <circle cx={size / 2} cy={size / 2} r={r - stroke * 0.9} fill="#05060c" stroke="rgba(255,255,255,.05)" />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.05)" strokeWidth={stroke} />

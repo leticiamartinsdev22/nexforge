@@ -58,7 +58,7 @@ export default function Overview() {
             <span className="glow" style={{ width: 7, height: 7, background: issues.length ? 'var(--bad)' : 'var(--ok)' }} />
             {issues.length ? 'Ação necessária' : 'Tudo certo'}
           </div>
-          <div className="hero-h">{issues.length ? `${issues.length} pontos exigem sua decisão` : 'Nenhum ponto de atenção'}</div>
+          <div className="hero-h">{issues.length === 1 ? '1 ponto exige sua decisão' : issues.length ? `${issues.length} pontos exigem sua decisão` : 'Nenhum ponto de atenção'}</div>
           <div className="hero-sub">{[bad.length ? `${bad.length} aplicação fora` : 'nenhuma aplicação fora', server.pendingReboot && 'reinício pendente'].filter(Boolean).join(' · ')}</div>
           <div className="hero-btn-wrap">
             <button type="button" className="hero-btn" onClick={runRefresh} disabled={loading}>
@@ -104,7 +104,7 @@ export default function Overview() {
             </div>
             <div><div className="mini-l">CPU</div><div style={{ fontSize: 14, fontWeight: 700, margin: '6px 0 8px' }}>{a.cpu}%</div><Bar value={a.cpu} track showN={false} /></div>
             <div><div className="mini-l">Memória</div><div style={{ fontSize: 14, fontWeight: 700, margin: '6px 0 5px' }}>{a.mem} MB</div><div style={{ fontSize: 11, color: 'var(--dimmer)' }}>{a.cont.split('/')[0]}/{a.cont.split('/')[1]} cont.</div></div>
-            <ChevronRight size={18} color="#4b5565" />
+            <ChevronRight size={18} color="#7d8fb5" />
           </div>
         ))}
         <div style={{ textAlign: 'center', padding: '22px 0 6px', borderTop: '1px solid var(--line2)' }}>

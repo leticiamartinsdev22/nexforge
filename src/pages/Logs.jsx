@@ -6,7 +6,7 @@ import { fetchLogs } from '../api'
 import { startPolling } from '../polling'
 import { Panel, Stats } from '../components/ui'
 
-const COL = { INFO: '#6b7488', WARN: '#f5a524', ERROR: '#ff5470' }
+const COL = { INFO: 'var(--dimmer)', WARN: '#f5a524', ERROR: '#ff5470' }
 
 export default function Logs() {
   const { logSources } = useData()
@@ -44,7 +44,7 @@ export default function Logs() {
           {logSources.length === 0 && <span style={{ color: 'var(--dimmer)', fontSize: 13 }}>Nenhum container encontrado (Docker indisponível?).</span>}
           {logSources.map((source) => <button key={source} className={`fchip ${activeSel === source ? 'on' : ''}`} onClick={() => setSel(source)}>{source}</button>)}
         </div>
-        <div className="logbox">
+        <div className="logbox" tabIndex="0" aria-label="Linhas recentes de log do agente">
           {err && <div style={{ color: 'var(--bad)' }}>Falha ao buscar os logs.</div>}
           {!err && visibleLines.length === 0 && <div style={{ fontWeight: 600 }}>-- No entries --</div>}
           {visibleLines.map((line, index) => (

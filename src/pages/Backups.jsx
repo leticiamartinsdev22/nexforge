@@ -17,12 +17,12 @@ function ScheduleControls({ backup, nextTxt, saveSchedule, runBackup }) {
 
   return (
     <Panel title="Agendamento" sub="Rotina única executada pelo agente">
-      <label className="flabel">Frequência</label>
-      <select className="field" value={freq} onChange={(e) => setFreq(e.target.value)} style={{ marginBottom: 18 }}>
+      <label className="flabel" htmlFor="backup-frequency">Frequência</label>
+      <select id="backup-frequency" className="field" value={freq} onChange={(e) => setFreq(e.target.value)} style={{ marginBottom: 18 }}>
         <option>Diária</option><option>Semanal</option><option>A cada 12h</option>
       </select>
-      <label className="flabel">Horário</label>
-      <input className="field" type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ marginBottom: 18 }} />
+      <label className="flabel" htmlFor="backup-time">Horário</label>
+      <input id="backup-time" className="field" type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ marginBottom: 18 }} />
       <div style={{ border: '1px solid var(--line)', borderRadius: 11, padding: '14px 16px', marginBottom: 20, background: 'rgba(255,255,255,.015)' }}>
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Próxima execução: <b style={{ color: 'var(--txt)' }}>{nextTxt}</b></div>
         <div style={{ fontSize: 11, color: 'var(--dimmer)', marginTop: 5 }}>Horário do servidor</div>
@@ -58,7 +58,7 @@ export default function Backups() {
     { k: 'a', h: 'Aplicação', r: (b) => <div className="cell"><SDot s={b.hasBackup ? 'ok' : 'off'} /><span style={{ fontSize: 16 }}>{b.icon}</span><b className="strong">{b.app}</b></div> },
     { k: 'l', h: 'Último backup encontrado', r: (b) => (b.hasBackup ? b.last : 'Nenhum encontrado') },
     { k: 's', h: 'Tamanho', r: (b) => (b.mb ? `${b.mb.toFixed(1)} MB` : '0 MB') },
-    { k: 'c', h: 'Cópias', r: (b) => b.copies ?? (b.mb ? 7 : 0) },
+    { k: 'c', h: 'Cópias', r: (b) => b.copies ?? 0 },
     { k: 'n', h: 'Próxima rotina', r: () => (backup.enabled ? nextShort : 'Sem agendamento') },
     { k: 't', h: 'Encontrado', r: (b) => <Pill tone={b.hasBackup ? 'ok' : 'muted'}>{b.hasBackup ? 'Sim' : 'Não'}</Pill> },
     { k: 'st', h: 'Status', r: (b) => (b.hasBackup ? <Pill tone="ok">● Arquivo encontrado</Pill> : <Pill tone="muted">Nenhum arquivo</Pill>) },
