@@ -49,3 +49,28 @@ test('schedule mirror replaces an existing file atomically', async () => {
     fs.rmSync(temp, { recursive: true, force: true })
   }
 })
+
+
+test('manual backup rejects concurrent runs until the configured command finishes', async () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexforge-backup-run-test-'))
+  let finish
+  const completed = new Promise((resolve) => { finish = resolve })
+  const backup = createBackup({
+    cfg: { backups: { command: [process.execPath, '-e', 'setTimeout(() => {}, 400)'] } },
+    dataDir: temp,
+    onResult: finish,
+  })
+  try {
+    assert.deepEqual(backup.run('manual'), { ok: true })
+    assert.deepEqual(backup.run('manual'), { ok: false, reason: 'running' })
+    const result = await Promise.race([
+      completed,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('backup command timed out')), 3000)),
+    ])
+    assert.equal(result.origin, 'manual')
+    assert.equal(result.ok, true)
+  } finally {
+    backup.close()
+    fs.rmSync(temp, { recursive: true, force: true })
+  }
+})

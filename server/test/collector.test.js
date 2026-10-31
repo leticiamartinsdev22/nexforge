@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mergeEvents, summarizeSecurityChecks, summarizeStats } from '../src/collector.js'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { inspectBackupFiles, mergeEvents, summarizeSecurityChecks, summarizeStats } from '../src/collector.js'
 
 const event = (ts, msg, source = 'nexforge') => ({ ts, level: 'bad', msg, source })
 
@@ -58,4 +61,33 @@ test('security checks apply configured host thresholds and validate configured c
   })
   assert.deepEqual(healthy, { checksOk: 4, checksTotal: 4 })
   assert.deepEqual(failing, { checksOk: 2, checksTotal: 4 })
+})
+
+
+test('backup listing rejects traversal, absolute paths, and symbolic links', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'nexforge-backup-scan-'))
+  const root = path.join(temp, 'backups')
+  const marker = path.join(temp, 'outside-secret.bin')
+  const external = path.join(temp, 'external')
+  try {
+    fs.mkdirSync(root)
+    fs.mkdirSync(external)
+    fs.writeFileSync(marker, 'outside')
+    fs.writeFileSync(path.join(external, 'external.bin'), 'outside')
+    assert.deepEqual(inspectBackupFiles(root, '..'), { last: 0, size: 0, copies: 0 })
+    assert.deepEqual(inspectBackupFiles(root, '../outside-secret.bin'), { last: 0, size: 0, copies: 0 })
+    assert.deepEqual(inspectBackupFiles(root, path.resolve(marker)), { last: 0, size: 0, copies: 0 })
+
+    const appDir = path.join(root, 'app')
+    fs.mkdirSync(appDir)
+    fs.writeFileSync(path.join(appDir, 'first.tar'), 'first')
+    fs.writeFileSync(path.join(appDir, 'second.tar'), 'second')
+    fs.symlinkSync(marker, path.join(appDir, 'linked-file'))
+    assert.equal(inspectBackupFiles(root, 'app').copies, 2)
+
+    fs.symlinkSync(external, path.join(root, 'linked-app'), 'dir')
+    assert.deepEqual(inspectBackupFiles(root, 'linked-app'), { last: 0, size: 0, copies: 0 })
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true })
+  }
 })

@@ -156,6 +156,10 @@ test('all agent read endpoints authenticate and degrade without Docker', async (
   assert.ok(Array.isArray(responses.get('/api/domains').items))
   assert.equal(responses.get('/api/backups').available, false)
 
+  const unconfiguredBackup = await request('/api/actions/backup', { method: 'POST', headers: authHeaders })
+  assert.equal(unconfiguredBackup.status, 501)
+  assert.deepEqual(await unconfiguredBackup.json(), { error: 'not_configured' })
+
   const badRange = await request('/api/metrics?range=invalid', { headers: authHeaders })
   assert.equal(badRange.status, 400)
   assert.deepEqual(await badRange.json(), { error: 'invalid_range' })

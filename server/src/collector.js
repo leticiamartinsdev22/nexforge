@@ -67,6 +67,30 @@ export function mergeEvents(...sources) {
   ).slice(0, 200)
 }
 
+export function inspectBackupFiles(dir, key) {
+  const empty = { last: 0, size: 0, copies: 0 }
+  if (typeof dir !== 'string' || !dir || typeof key !== 'string') return empty
+  const folder = safe(key)
+  if (!folder || folder === '.' || folder === '..') return empty
+  const base = path.resolve(dir)
+  const target = path.resolve(base, folder)
+  const relative = path.relative(base, target)
+  if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return empty
+  try {
+    const directory = fs.lstatSync(target)
+    if (!directory.isDirectory() || directory.isSymbolicLink()) return empty
+    const files = []
+    for (const name of fs.readdirSync(target)) {
+      try {
+        const entry = fs.lstatSync(path.join(target, name))
+        if (entry.isFile() && !entry.isSymbolicLink()) files.push(entry)
+      } catch {}
+    }
+    const newest = files.reduce((latest, entry) => !latest || entry.mtimeMs > latest.mtimeMs ? entry : latest, null)
+    return { last: newest?.mtimeMs ?? 0, size: newest ? newest.size / 1048576 : 0, copies: files.length }
+  } catch { return empty }
+}
+
 function parseLine(line) {
   const m = line.match(/^(\S+Z)\s(.*)$/)
   const msg = m ? m[2] : line
@@ -248,16 +272,7 @@ export function createCollector(cfg, dataDir, ctx = {}) {
   function backups(apps) {
     const dir = cfg.backups?.dir
     return apps.map((a) => {
-      let last = 0, size = 0, copies = 0
-      try {
-        if (dir) {
-          const p = path.join(dir, safe(a.key))
-          const files = fs.readdirSync(p).map((f) => fs.statSync(path.join(p, f))).filter((s) => s.isFile())
-          copies = files.length
-          const newest = files.sort((x, y) => y.mtimeMs - x.mtimeMs)[0]
-          if (newest) { last = newest.mtimeMs; size = newest.size / 1048576 }
-        }
-      } catch {}
+      const { last, size, copies } = inspectBackupFiles(dir, a.key)
       return { app: a.name, icon: a.icon, mb: r1(size), hasBackup: !!last, last: last ? ago(last) : 'Nenhum backup encontrado', lastTs: last || null, copies }
     })
   }
