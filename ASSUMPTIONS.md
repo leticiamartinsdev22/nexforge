@@ -1,7 +1,7 @@
 # Assumptions
 
 - The supported frontend mode is live-only: authenticated pages require the NexForge agent. When the agent is unreachable, the layout shows a connection state and does not render placeholder metrics.
-- Browser verification uses test-only credentials and isolated ports; no credentials from local env files are used.
+- The original browser matrix used test-only credentials on isolated ports. Password-fix verification used the configured panel_password file at http://localhost:4173; the secret value was not printed.
 - Screenshots and Playwright outputs belong under ignored screenshots/, test-results/, or playwright-report/ directories.
 - The real project root is nexforge/nexforge; the parent directory only contains that project.
 - The active Windows Vite processes hold the workspace node_modules on ports 4173/4174; WSL could not replace it because of NTFS EACCES, and the Windows npm test lacked Vitest. Clean installs, lint/build and tests ran in a synchronized Temp mirror under WSL Ubuntu Node 20.20.2/npm 11.19.0. Using the Windows npm cache allowed both offline installs after the WSL cache missed why-is-node-running 2.3.0.
