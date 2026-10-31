@@ -17,6 +17,7 @@ import Logs from './pages/Logs'
 import Security from './pages/Security'
 import Topology from './pages/Topology'
 import Settings from './pages/Settings'
+import NotFound from './pages/NotFound'
 import { ThemeProvider } from './theme'
 import { ToastProvider } from './components/ToastProvider'
 
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="/seguranca" element={<Security />} />
             <Route path="/topologia" element={<Topology />} />
             <Route path="/configuracoes" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </ThemeProvider>
