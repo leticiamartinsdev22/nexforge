@@ -14,6 +14,22 @@ nexforge/
 └── server/     agente (Node/Express) que coleta os dados reais
 ```
 
+## Testes e auditoria local
+
+Use Node.js dentro da faixa documentada acima. Os comandos a seguir partem da raiz do projeto e instalam as dependências registradas nos dois lockfiles:
+
+```bash
+npm ci
+npm --prefix server ci
+npm run lint
+npm test                 # Vitest do frontend + node:test do agente
+npm run build
+npm audit
+npm --prefix server audit
+```
+
+O npm 11 pode bloquear scripts opcionais de `protobufjs`, `ssh2` e, conforme a plataforma, `cpu-features`. Nesta versão, o script de `protobufjs` só verifica compatibilidade de faixa de versão; o de `ssh2` tenta compilar uma ligação criptográfica opcional, e `cpu-features` é uma aceleração nativa opcional. A coleta pelo socket Unix local foi instalada, iniciada e testada sem aprovar esses scripts. O transporte Docker por SSH não foi exercitado; se você for usá-lo, revise os scripts e aprove-os deliberadamente com `npm approve-scripts` antes de validar esse transporte.
+
 ## 1) Frontend local conectado ao agente
 
 ```bash
