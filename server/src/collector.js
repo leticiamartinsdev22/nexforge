@@ -300,7 +300,7 @@ export function createCollector(cfg, dataDir, ctx = {}) {
       }
       trackHost(h)
       let cs = [], dockerOk = true
-      try { cs = await containers() } catch (e) { dockerOk = false; warnings.push('Docker indisponível ou sem permissão para consultar o socket.') }
+      try { cs = await containers() } catch { dockerOk = false; warnings.push('Docker indisponível ou sem permissão para consultar o socket.') }
       const apps = buildApps(cs)
       trackChanges(apps)
       const dom = await domains()
