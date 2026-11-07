@@ -6,6 +6,7 @@ import { logout } from './auth'
 import { Ctx } from './store-context'
 import { rel } from './store-utils'
 import { startPolling } from './polling'
+import { useToast } from './components/toast-context'
 
 const READ_ALERTS_KEY = 'nexforge.read-alerts.v1'
 
@@ -63,6 +64,8 @@ export function DataProvider({ children }) {
   const [chartHistory, setChartHistory] = useState({})
   const [readAlertIds, setReadAlertIds] = useState(loadReadAlertIds)
   const historyRequest = useRef(0)
+  const backupRunning = useRef(false)
+  const { showToast } = useToast()
 
   const markAlertsRead = useCallback((ids) => {
     const next = new Set([...readAlertIds, ...ids])
@@ -120,12 +123,55 @@ export function DataProvider({ children }) {
   }, [])
 
   const runBackup = useCallback(() => act(async () => {
-        const r = await send('POST', '/api/actions/backup')
-    if (r.status === 202) return { ok: true, msg: 'Backup iniciado. O resultado aparece em Alertas.' }
-    if (r.status === 409) return { ok: false, msg: 'Já existe um backup em andamento.' }
-    if (r.status === 501) return { ok: false, msg: 'Backup não configurado: defina backups.command no config.json do agente.' }
-    return { ok: false, msg: 'Falha ao iniciar o backup.' }
-  }), [act])
+    if (backupRunning.current) return { ok: false, msg: 'Já existe um backup em andamento.' }
+    backupRunning.current = true
+    const startedAt = Date.now()
+    const toastId = showToast({ title: 'Iniciando backup...', tone: 'info', duration: 0, loading: true })
+    const finishToast = (ok, title, detail) => showToast({ id: toastId, title, detail, tone: ok ? 'success' : 'error', duration: ok ? 4000 : 6000, loading: false })
+    try {
+      const response = await send('POST', '/api/actions/backup')
+      if (response.status === 501) {
+        const message = 'Backup não configurado: defina backups.command no config.json do agente.'
+        finishToast(false, 'Backup não configurado', message)
+        return { ok: false, msg: message }
+      }
+      if (response.status === 409) {
+        const message = 'Já existe um backup em andamento.'
+        finishToast(false, message)
+        return { ok: false, msg: message }
+      }
+      if (response.status !== 202) {
+        finishToast(false, 'Falha ao iniciar o backup.')
+        return { ok: false, msg: 'Falha ao iniciar o backup.' }
+      }
+      showToast({ id: toastId, title: 'Backup em andamento...', tone: 'info', duration: 0, loading: true })
+      for (let attempt = 0; attempt < 1800; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000))
+        const status = await send('GET', '/api/backups')
+        if (!status.ok) throw new Error('Não foi possível consultar o estado do backup.')
+        const state = status.data.backup
+        const completed = Date.parse(state?.lastResult?.completedAt)
+        if (state?.running || !Number.isFinite(completed) || completed < startedAt) continue
+        await refresh()
+        if (state.lastResult.ok) {
+          finishToast(true, 'Backup concluído com sucesso', 'A cópia foi criada e os dados foram atualizados.')
+          return { ok: true, msg: 'Backup concluído com sucesso.' }
+        }
+        const message = 'O backup falhou. Verifique os alertas do agente.'
+        finishToast(false, 'Falha no backup', message)
+        return { ok: false, msg: message }
+      }
+      const message = 'O backup excedeu o tempo de acompanhamento. Verifique os alertas do agente.'
+      finishToast(false, 'Tempo limite do backup', message)
+      return { ok: false, msg: message }
+    } catch (error) {
+      const message = error?.message || 'Sem conexão com a API.'
+      finishToast(false, 'Falha no backup', message)
+      return { ok: false, msg: message }
+    } finally {
+      backupRunning.current = false
+    }
+  }), [act, refresh, showToast])
 
   const saveSchedule = useCallback((freq, time) => act(async () => {
         const r = await send('PUT', '/api/backup-schedule', { freq, time })

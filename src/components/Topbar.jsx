@@ -100,7 +100,7 @@ export default function Topbar() {
           <i style={bad ? { background: 'var(--bad)', borderColor: 'rgba(255,84,112,.35)', boxShadow: '0 0 8px rgba(255,84,112,.6)' } : undefined} />
           {bad ? 'Sem conexão com a API' : `Atualizado ${meta.updatedAt.toLocaleTimeString('pt-BR')}`}
         </div>
-        <button type="button" className="icon-btn" onClick={doRefresh} disabled={refreshLoading} title="Atualizar agora">
+        <button type="button" className="icon-btn" onClick={doRefresh} disabled={refreshLoading} title="Atualizar agora" aria-label="Atualizar agora">
           <RefreshCw size={17} strokeWidth={1.7} style={refreshLoading ? { animation: 'spin 1s linear infinite' } : undefined} />
         </button>
         <div className="bell-wrap" ref={bellRef}>
