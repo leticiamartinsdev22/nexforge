@@ -17,6 +17,7 @@ export function createBackup({ cfg, dataDir, onResult, store }) {
     ? savedSchedule
     : { freq: 'Diária', time: '03:15' }
   let running = false
+  let lastResult = null
   const offsiteConfigured = Boolean(process.env.RESTIC_REPOSITORY || process.env.RESTIC_PASSWORD)
   const offsiteEnabled = Boolean(process.env.RESTIC_REPOSITORY && (process.env.RESTIC_PASSWORD || process.env.RESTIC_PASSWORD_FILE))
   let offsite = {
@@ -75,6 +76,7 @@ export function createBackup({ cfg, dataDir, onResult, store }) {
     running = true
     execFile(cmd[0], cmd.slice(1), { timeout: cfg.backups.timeoutMs ?? 30 * 60e3, maxBuffer: 1e6, cwd: cfg.backups.cwd }, (err, stdout = '') => {
       running = false
+      lastResult = { ok: !err, completedAt: new Date().toISOString() }
       const syncedAt = stdout.match(/OFFSITE_BACKUP_OK=([^\r\n]+)/)?.[1] ?? null
       if (offsiteEnabled) {
         offsite = {
@@ -99,7 +101,7 @@ export function createBackup({ cfg, dataDir, onResult, store }) {
   return {
     enabled, run,
     close() { clearInterval(scheduleTimer) },
-    state: () => ({ enabled, running, schedule, next: next?.toISOString() ?? null, offsite }),
+    state: () => ({ enabled, running, schedule, next: next?.toISOString() ?? null, offsite, lastResult }),
     async initialize() {
       if (store) {
         const saved = await store.loadSchedule()

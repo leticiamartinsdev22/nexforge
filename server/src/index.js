@@ -14,6 +14,7 @@ import { createCollector } from './collector.js'
 import { createBackup } from './backup.js'
 import { createStorage } from './storage.js'
 import { metricRangeStart } from './metrics-range.js'
+import { validateBackupDirectory } from './backup-path.js'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dataDir = process.env.NEXFORGE_DATA_DIR || (
@@ -47,6 +48,19 @@ try {
 }
 if (!cfg.server || typeof cfg.server !== 'object' || Array.isArray(cfg.server)) cfg.server = {}
 if (!cfg.apps || typeof cfg.apps !== 'object' || Array.isArray(cfg.apps)) cfg.apps = {}
+if (!cfg.backups || typeof cfg.backups !== 'object' || Array.isArray(cfg.backups)) cfg.backups = {}
+if (!process.env.NEXFORGE_BACKUP_DIR && !fs.existsSync('/app') && ['/backups', '/backups/nexforge'].includes(cfg.backups.dir)) {
+  cfg.backups.dir = path.resolve(root, '..', 'backups')
+}
+const configuredBackupDir = process.env.NEXFORGE_BACKUP_DIR || cfg.backups.dir
+if (configuredBackupDir) {
+  try {
+    cfg.backups.dir = validateBackupDirectory(configuredBackupDir, { projectRoot: root, allowTemp: process.env.NODE_ENV === 'test', tempRoot: process.env.NEXFORGE_TEST_BACKUP_ROOT })
+  } catch {
+    console.error('Diretório de backups inválido. Use um caminho absoluto dentro de /backups ou backups/ do projeto.')
+    process.exit(1)
+  }
+}
 if (!Array.isArray(cfg.domains)) cfg.domains = []
 cfg.domains = cfg.domains.slice(0, 200)
 
@@ -101,7 +115,10 @@ const backup = createBackup({
         onResult: ({ origin, ok }) => collector.addEvent(ok ? 'ok' : 'bad', ok ? `Backup ${origin} concluído` : `Backup ${origin} falhou`, 'backup'),
 })
 ctx.backupState = backup.state
-const SESSION_TTL_MS = 4 * 3600e3
+const requestedSessionTtl = Number(process.env.SESSION_TTL_MS)
+const SESSION_TTL_MS = process.env.NODE_ENV === 'test' && Number.isFinite(requestedSessionTtl) && requestedSessionTtl >= 1000
+  ? Math.min(requestedSessionTtl, 4 * 3600e3)
+  : 4 * 3600e3
 const auth = makeAuth({ password: PANEL_PASSWORD, secret: PANEL_SECRET, ttlMs: SESSION_TTL_MS })
 const SESSION_COOKIE = 'nexforge_session'
 const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true'
@@ -220,7 +237,7 @@ app.get('/api/history', guard, (_, res) => {
 app.get('/api/containers', guard, (_, res) => {
   const snapshot = collector.get()
   const available = Boolean(snapshot?.docker?.available)
-  res.json({ available, items: available ? snapshot.containers : [] })
+  res.json({ available, items: available ? snapshot.containers : [], ...(available ? {} : { message: 'Docker indisponível ou sem permissão para consultar o socket.' }) })
 })
 
 app.get('/api/processes', guard, async (_, res) => {
@@ -243,7 +260,7 @@ app.get('/api/processes', guard, async (_, res) => {
 app.get('/api/logs', guard, (_, res) => {
   const snapshot = collector.get()
   const available = Boolean(snapshot?.docker?.available)
-  res.json({ available, sources: available ? snapshot.logSources : [], lines: [] })
+  res.json({ available, sources: available ? snapshot.logSources : [], lines: [], ...(available ? {} : { message: 'Docker indisponível ou sem permissão para consultar os logs.' }) })
 })
 
 app.get('/api/alerts', guard, (_, res) => {
@@ -253,10 +270,12 @@ app.get('/api/alerts', guard, (_, res) => {
 
 app.get('/api/security', guard, (_, res) => {
   const snapshot = collector.get()
+  const available = Boolean(snapshot?.docker?.available)
   res.json({
-    available: Boolean(snapshot),
+    available,
     security: snapshot?.security ?? null,
     hardening: snapshot?.hardening ?? [],
+    ...(available ? {} : { message: 'Docker indisponível ou sem permissão para consultar o estado de segurança.' }),
   })
 })
 
@@ -273,7 +292,7 @@ app.get('/api/databases', guard, (_, res) => {
 
 app.get('/api/backups', guard, (_, res) => {
   const snapshot = collector.get()
-  const backupState = snapshot?.backup ?? { enabled: false, running: false }
+  const backupState = backup.state()
   res.json({
     available: Boolean(backupState.enabled),
     items: snapshot?.backups ?? [],
@@ -293,21 +312,21 @@ app.post('/api/refresh', guard, async (_, res) => {
 
 app.get('/api/logs/:source', guard, async (req, res) => {
   const snapshot = collector.get()
-  if (!snapshot?.docker?.available) return res.json({ available: false, lines: [] })
+  if (!snapshot?.docker?.available) return res.json({ available: false, lines: [], message: 'Docker indisponível ou sem permissão para consultar os logs.' })
   if (!snapshot.logSources.includes(req.params.source)) {
     return res.status(404).json({ available: true, error: 'not_found' })
   }
   try {
     res.json({ available: true, lines: await collector.logs(req.params.source) })
   } catch {
-    res.json({ available: false, lines: [] })
+    res.json({ available: false, lines: [], message: 'Não foi possível ler os logs deste container.' })
   }
 })
 
 app.post('/api/actions/backup', guard, (_, res) => {
   const r = backup.run('manual')
   if (r.ok) return res.status(202).json({ started: true })
-  res.status(r.reason === 'running' ? 409 : 501).json({ error: r.reason })
+  res.status(r.reason === 'running' ? 409 : 501).json({ error: r.reason, ...(r.reason === 'not_configured' ? { message: 'Configure backups.command no config.json do agente.' } : {}) })
 })
 
 app.put('/api/backup-schedule', guard, async (req, res) => {

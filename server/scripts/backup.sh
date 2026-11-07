@@ -1,7 +1,15 @@
 #!/bin/sh
 set -eu
 
-backup_dir=/backups/nexforge
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+app_dir=${NEXFORGE_APP_DIR:-/app}
+if [ ! -d "$app_dir" ]; then
+  app_dir=$(CDPATH= cd "$script_dir/.." && pwd)
+fi
+backup_dir=${NEXFORGE_BACKUP_DIR:-/backups/nexforge}
+if [ -z "${NEXFORGE_BACKUP_DIR:-}" ] && [ ! -d /app ]; then
+  backup_dir="$app_dir/../backups/nexforge"
+fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 archive="$backup_dir/nexforge-$stamp.tar.gz"
 temporary="$archive.tmp"
@@ -12,7 +20,7 @@ trap 'rm -f "$temporary"; rm -rf "$stage"' EXIT HUP INT TERM
 case "$retention_days" in ''|*[!0-9]*) echo "BACKUP_RETENTION_DAYS precisa ser um número de dias" >&2; exit 2 ;; esac
 if [ "$retention_days" -lt 1 ]; then echo "BACKUP_RETENTION_DAYS precisa ser >= 1" >&2; exit 2; fi
 mkdir -p "$backup_dir"
-tar -cf "$stage/agent-state.tar" -C /app config.json data
+tar -cf "$stage/agent-state.tar" -C "$app_dir" config.json data
 if [ -n "${DATABASE_URL:-}" ]; then
   pg_dump --format=custom --no-owner --no-privileges --file="$stage/nexforge.dump" "$DATABASE_URL"
   tar -czf "$temporary" -C "$stage" agent-state.tar nexforge.dump

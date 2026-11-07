@@ -235,7 +235,7 @@ Os dados de provedor/localização e a lista de domínios podem ser editados na 
 O agente registra um alerta quando um app **cai** ou **volta**, quando **disco/memória** passam do limite (padrão 90%, ajuste em `thresholds` no `config.json`; registra de novo ao voltar 5 pontos abaixo) e quando um **backup** termina ou falha. Eles aparecem no sino e na tela Alertas.
 
 ### Backups (manual e agendado)
-O Compose inclui backup do PostgreSQL, `config.json` e estado do agente em `/backups/nexforge/`. O `pg_dump` usado no agente acompanha a versão principal do PostgreSQL para que o arquivo possa ser restaurado pelo servidor 16 do Compose. O arquivo combinado é validado antes de ser publicado. Cópias locais mais antigas que `NEXFORGE_BACKUP_RETENTION_DAYS` são removidas após um backup bem-sucedido. O backup não inclui outros containers. Em modo agente independente, defina no `config.json` um comando de backup (array, sem shell). Scripts adicionais do Compose ficam em `server/scripts/`; o diretório local de destino é `backups/` (ajustável por `NEXFORGE_BACKUPS_PATH` no `.env` raiz):
+O Compose inclui backup do PostgreSQL, `config.json` e estado do agente em `/backups/nexforge/`. O `pg_dump` usado no agente acompanha a versão principal do PostgreSQL para que o arquivo possa ser restaurado pelo servidor 16 do Compose. O arquivo combinado é validado antes de ser publicado. Cópias locais mais antigas que `NEXFORGE_BACKUP_RETENTION_DAYS` são removidas após um backup bem-sucedido. O backup não inclui outros containers. Em modo agente independente, defina no `config.json` um comando de backup (array, sem shell). Scripts adicionais ficam em `server/scripts/`. No WSL, o destino local padrão é `backups/nexforge/`; ajuste-o com `NEXFORGE_BACKUP_DIR` em `server/.env`. Esse valor precisa ser absoluto e ficar dentro de `/backups` (Compose) ou da pasta `backups/` do projeto; segmentos `..`, raízes do sistema e links simbólicos que escapem dessas áreas são rejeitados. No Compose, o destino do volume continua configurado por `NEXFORGE_BACKUPS_PATH` no `.env` raiz:
 ```json
 "backups": { "dir": "/backups", "command": ["/bin/sh", "/scripts/backup.sh"], "timeoutMs": 1800000 }
 ```
@@ -257,6 +257,8 @@ O Compose inclui backup do PostgreSQL, `config.json` e estado do agente em `/bac
 ### Docker no WSL2
 Com Docker Desktop: ative a integração com a sua distro (Settings → Resources → WSL integration).
 Com Docker Engine na distro: `sudo usermod -aG docker $USER` e reabra o terminal.
+
+Para conferir permissões da conta que realmente executa o agente (sem mudar as permissões do host), rode `id`, `getent group adm`, `getent group docker` e `ls -l /var/run/docker.sock`. Verifique também `ls -l` no arquivo de log usado pelo serviço; o agente deve receber acesso apenas pelos grupos necessários (`docker` para o socket e `adm` quando a leitura daquele log exigir). Reinicie a sessão do serviço após alterar grupos.
 
 ### Injetar dados de outra fonte
 O front só consome o JSON de `GET /api/snapshot` (header `Authorization: Bearer <token>`).

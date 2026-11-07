@@ -76,29 +76,26 @@ export function inspectBackupFiles(dir, key) {
   const target = path.resolve(base, folder)
   const relative = path.relative(base, target)
   if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return empty
-  try {
-    const directory = fs.lstatSync(target)
-    if (!directory.isDirectory() || directory.isSymbolicLink()) return empty
-    const files = []
-    for (const name of fs.readdirSync(target)) {
-      try {
-        const entry = fs.lstatSync(path.join(target, name))
-        if (entry.isFile() && !entry.isSymbolicLink()) files.push(entry)
-      } catch {}
+  const inspect = (directoryPath) => {
+    try {
+      const directory = fs.lstatSync(directoryPath)
+      if (!directory.isDirectory() || directory.isSymbolicLink()) return empty
+      const files = []
+      for (const name of fs.readdirSync(directoryPath)) {
+        try {
+          const entry = fs.lstatSync(path.join(directoryPath, name))
+          if (entry.isFile() && !entry.isSymbolicLink()) files.push(entry)
+        } catch {}
+      }
+      const newest = files.reduce((latest, entry) => !latest || entry.mtimeMs > latest.mtimeMs ? entry : latest, null)
+      return { last: newest?.mtimeMs ?? 0, size: newest ? newest.size / 1048576 : 0, copies: files.length }
+    } catch (error) {
+      return error.code === 'ENOENT' ? null : empty
     }
-    const newest = files.reduce((latest, entry) => !latest || entry.mtimeMs > latest.mtimeMs ? entry : latest, null)
-    return { last: newest?.mtimeMs ?? 0, size: newest ? newest.size / 1048576 : 0, copies: files.length }
-  } catch { return empty }
-}
-
-function parseLine(line) {
-  const m = line.match(/^(\S+Z)\s(.*)$/)
-  const msg = m ? m[2] : line
-  return {
-    t: m ? new Date(m[1]).toLocaleTimeString('pt-BR') : '',
-    lvl: /\b(error|fatal|panic|exception)\b/i.test(msg) ? 'ERROR' : /\bwarn(ing)?\b/i.test(msg) ? 'WARN' : 'INFO',
-    msg: msg.slice(0, 500),
   }
+  const nested = inspect(target)
+  if (nested || folder !== 'nexforge') return nested ?? empty
+  return inspect(base) ?? empty
 }
 
 export function summarizeStats(s) {
