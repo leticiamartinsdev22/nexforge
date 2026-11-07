@@ -11,3 +11,13 @@
 - Host log permission-denial behavior was not reproducible in the isolated WSL agent; Docker log access worked for the local test socket. A host-specific denied log source still needs a manual check under that account.
 - Windows reports Node 24.18.0/npm 11.16.0, but its workspace node_modules was not replaced. An offline ESLint 8 install was blocked by uncached brace-expansion 1.1.16; the configured npm run lint uses Oxlint. The registry lookup did not respond during the checkup, so ESLint itself was not run.
 - Browser screenshots were taken at 375, 768 and 1440 CSS pixels on pages with live local Docker data; no screenshot reference files were supplied for visual comparison.
+
+
+## Follow-up checkup assumptions
+
+- WSL npm ci in the workspace failed with EACCES while removing node_modules/.bin. No permissions were changed. A fresh install, lint, build and tests were rerun in /home/lieci/nexforge-final-checkup, a Linux copy made for this checkup without production .env or server/config.json.
+- Fresh Linux-copy installs used the Windows npm cache offline because the WSL registry request timed out. Both offline audits found zero vulnerabilities. Full online npm audit also succeeded from Windows for the checkout and server.
+- Browser checks used explicit http://localhost:5173, Windows Node 24.18.0 and headless Microsoft Edge, with an isolated test agent on 127.0.0.1:4000. Route, responsive, axe and console checks passed. The later all-controls interaction script did not complete and produced no inventory artifact; no result is inferred for that requirement.
+- The real-host test agent used only isolated test credentials and the real /var/run/docker.sock. The socket was root:docker mode 0660; the WSL account already belonged to docker. The containers and security endpoints returned HTTP 200 with available true. The logs endpoint returned one source, while reading it returned available false with a generic log-read error. Common syslog, auth.log and nginx access log files were absent. No group or permission change was attempted.
+- Performance evidence is limited to production build output: main JavaScript 375.42 kB (116.48 kB gzip), CSS 51.89 kB (13.67 kB gzip), and fonts as reported by Vite. Lighthouse, React render counts, and multi-minute browser memory measurements were not completed.
+- Previous credential values were not reopened or printed during this follow-up. The earlier checkup reported old values absent from the current repository and local history. This follow-up confirmed a clean working tree, no configured Git remote, environment files and server/config.json ignored, and no VITE secret-like variable names in tracked source.
