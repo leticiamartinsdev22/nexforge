@@ -1,8 +1,8 @@
 {
   "server": {
     "name": "NexForge",
-    "region": "—",
-    "provider": "—"
+    "region": "Ubuntu Linux",
+    "provider": "Máquina própria"
   },
   "apps": {
     "nexforge": {
@@ -20,6 +20,11 @@
     ],
     "timeoutMs": 1800000
   },
+  "hardening": [
+    ["Acesso local restrito", "O painel e os serviços expõem apenas o necessário em ambientes locais e não abrem portas públicas sem necessidade."],
+    ["Segredos fora do repositório", "Senhas, tokens e credenciais ficam em pasta externa protegida e não dentro do projeto."],
+    ["Ações do host limitadas", "O coletor consulta apenas métricas e estado do Ubuntu WSL; nenhuma ação irrestrita é executada pelo agente."]
+  ],
   "ignoreContainers": [
     "nexforge-db",
     "nexforge-frontend"
