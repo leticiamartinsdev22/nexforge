@@ -13,6 +13,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   cacheDir: process.platform === 'win32' ? windowsCacheDir : undefined,
   build: { outDir: process.platform === 'win32' ? windowsBuildDir : 'dist', emptyOutDir: process.platform === 'win32' },
-  server: { proxy },
+  server: {
+    proxy,
+    allowedHosts: process.env.VITE_ALLOWED_HOSTS
+      ? process.env.VITE_ALLOWED_HOSTS.split(',').map((host) => host.trim()).filter(Boolean)
+      : [],
+  },
   preview: { proxy },
 })

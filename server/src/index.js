@@ -98,7 +98,9 @@ function normalizeRegistryDate(value) {
 }
 
 const requestedPoll = Number(process.env.POLL_MS)
-const POLL = Number.isFinite(requestedPoll) && requestedPoll >= 15000 ? Math.min(requestedPoll, 3600000) : 60000
+const POLL = process.env.NODE_ENV === 'test'
+  ? (Number.isFinite(requestedPoll) && requestedPoll >= 1000 ? Math.min(requestedPoll, 3600000) : 60000)
+  : (Number.isFinite(requestedPoll) && requestedPoll >= 15000 ? Math.min(requestedPoll, 3600000) : 60000)
 const dbPassword = readSecret('DATABASE_PASSWORD_FILE', 'DATABASE_PASSWORD')
 const databaseUrl = process.env.DATABASE_URL || (dbPassword && process.env.DATABASE_HOST
   ? `postgresql://${encodeURIComponent(process.env.DATABASE_USER || 'nexforge')}:${encodeURIComponent(dbPassword)}@${process.env.DATABASE_HOST}:${process.env.DATABASE_PORT || 5432}/${encodeURIComponent(process.env.DATABASE_NAME || 'nexforge')}`
@@ -453,11 +455,11 @@ const PORT = process.env.PORT !== undefined && Number.isInteger(requestedPort) &
 const HOST = process.env.HOST || '127.0.0.1'
 await collector.initialize()
 await backup.initialize()
-await tick()
 const pollTimer = setInterval(tick, POLL)
-const server = app.listen(PORT, HOST, () => console.log(
-  'NexForge agent em http://' + HOST + ':' + PORT + ' (coleta a cada ' + (POLL / 1000) + 's)',
-))
+const server = app.listen(PORT, HOST, () => {
+  console.log('NexForge agent em http://' + HOST + ':' + PORT + ' (coleta a cada ' + (POLL / 1000) + 's)')
+  void tick()
+})
 
 async function shutdown() {
   clearInterval(pollTimer)

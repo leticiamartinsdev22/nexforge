@@ -124,7 +124,28 @@ export function createCollector(cfg, dataDir, ctx = {}) {
   let events = Array.isArray(savedEvents) ? savedEvents.slice(0, 200) : []
   let prevStatus = null
   let pkgCache = { at: 0, n: 0 }
-  let snapshot = null
+  let snapshot = {
+    generatedAt: new Date().toISOString(),
+    warnings: ['Coleta inicial em andamento.'],
+    server: {
+      name: cfg.server?.name ?? os.hostname(), id: os.hostname(), region: cfg.server?.region ?? 'Não informado',
+      provider: cfg.server?.provider ?? 'Não informado', ip: 'Aguardando dados', os: 'Aguardando dados',
+      cpu: 0, ram: 0, disk: 0, vcpu: 1, load: null,
+      ramUsed: '0.0', ramTotal: '0.0', diskUsed: '0.0', diskTotal: '0.0',
+      uptime: 'Aguardando dados', uptimeFull: 'Aguardando dados', uptimeDays: 0,
+      netMBs: 0, pendingReboot: false, bootAt: Date.now(), source: 'Inicializando',
+      metricsAt: new Date().toISOString(),
+    },
+    docker: { available: false, containerCount: 0 }, containers: [], apps: [], hiddenApps: [],
+    domains: [], dbs: [], backups: [], alerts: [], events: [], hardening: cfg.hardening ?? [],
+    security: {
+      packages: null, rebootPending: false, updatesSupported: false, updateAction: null,
+      lastBoot: 'Não informado', publicPorts: 0, checksOk: 0, checksTotal: 3,
+    },
+    offsite: ctx.backupState?.() ?? { enabled: false },
+    backup: ctx.backupState?.() ?? { enabled: false },
+    logSources: [], history: { cpu: [], ram: [], disk: [], net: [] },
+  }
   let running = false
 
   const th = { disk: cfg.thresholds?.disk ?? 90, ram: cfg.thresholds?.ram ?? 90 }

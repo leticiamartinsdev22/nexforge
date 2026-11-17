@@ -36,7 +36,7 @@ async function startAgent(t, { backupCommand, sessionTtlMs, dockerSocketMode } =
   let deniedSocketServer
   let deniedLogDirectory
   let deniedSocket
-  if (dockerSocketMode === 'denied') {
+  if (dockerSocketMode === 'denied' && process.platform !== 'win32') {
     const socketPath = path.join(directory, 'restricted docker', 'docker.sock')
     deniedLogDirectory = path.join(directory, 'restricted logs')
     fs.mkdirSync(path.dirname(socketPath), { recursive: true })
@@ -92,11 +92,11 @@ async function startAgent(t, { backupCommand, sessionTtlMs, dockerSocketMode } =
   t.after(async () => {
     if (child.exitCode === null) {
       child.kill('SIGTERM')
-      await Promise.race([once(child, 'exit'), delay(5000)])
+      await Promise.race([once(child, 'exit'), delay(1000)])
     }
     if (child.exitCode === null) {
       child.kill('SIGKILL')
-      await once(child, 'exit')
+      await Promise.race([once(child, 'exit'), delay(1000)])
     }
     if (deniedSocketServer) await new Promise((resolve) => deniedSocketServer.close(resolve))
     if (deniedLogDirectory) fs.chmodSync(deniedLogDirectory, 0o700)
@@ -109,13 +109,20 @@ async function startAgent(t, { backupCommand, sessionTtlMs, dockerSocketMode } =
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (child.exitCode !== null) throw new Error('Agent exited before ready: ' + output)
     try {
-      const response = await fetch(base + '/api/health')
+      const response = await fetch(base + '/api/health', { signal: AbortSignal.timeout(1000) })
       if (response.ok) { ready = true; break }
     } catch {}
     await delay(250)
   }
   assert.equal(ready, true, 'agent did not become ready')
-  return { base, request: (route, options) => fetch(base + route, options), child }
+  return {
+    base,
+    request: (route, options = {}) => fetch(base + route, {
+      ...options,
+      signal: options.signal ?? AbortSignal.timeout(5000),
+    }),
+    child,
+  }
 }
 
 test('all agent read endpoints authenticate and degrade without Docker', async (t) => {
