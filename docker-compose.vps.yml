@@ -6,6 +6,8 @@ services:
   agent:
     environment:
       TRUST_PROXY: "2"
+      COOKIE_SECURE: "true"
+      CORS_ORIGIN: https://${NEXFORGE_DOMAIN:?Set NEXFORGE_DOMAIN in the VPS .env file}
 
   frontend:
     networks:
